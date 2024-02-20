@@ -1,10 +1,9 @@
 class TaskScheduler {
   constructor() {
     this.taskQueue = [];
+    this.currentTask = null;
     this.currentTaskTimer = null;
     this.paused = false;
-    this.currentTaskRemainingTime = null;
-    this.currentTaskStartTime = null;
   }
 
   addTask(taskFunction, delay) {
@@ -12,25 +11,27 @@ class TaskScheduler {
   }
 
   start() {
-    if (!this.paused && this.taskQueue.length > 0) {
+    if (!this.paused && this.taskQueue.length > 0 && !this.currentTask) {
       this.executeNextTask();
+    } else if (this.paused && this.currentTask) {
+      // Resume the current task if paused
+      this.resumeCurrentTask();
     }
   }
 
   executeNextTask() {
     if (this.taskQueue.length === 0) {
       console.log("All tasks have been executed.");
+      this.currentTask = null;
       return;
     }
 
-    if (this.paused) {
-      return;
+    // Move the next task from the queue to current if no task is currently being executed or paused
+    if (!this.currentTask) {
+      this.currentTask = this.taskQueue.shift();
     }
 
-    const { taskFunction, delay } = this.taskQueue.shift();
-
-    this.currentTaskRemainingTime = delay;
-    this.currentTaskStartTime = Date.now();
+    const { taskFunction, delay } = this.currentTask;
 
     this.currentTaskTimer = setTimeout(() => {
       try {
@@ -38,36 +39,37 @@ class TaskScheduler {
       } catch (error) {
         console.error('Task execution error:', error);
       }
-      this.executeNextTask();
-    }, this.currentTaskRemainingTime);
+      this.currentTask = null; // Clear current task after execution
+      this.executeNextTask(); // Proceed to next task
+    }, delay);
   }
 
   pause() {
-    if (!this.paused && this.currentTaskTimer) {
+    if (this.currentTaskTimer) {
       clearTimeout(this.currentTaskTimer);
       this.paused = true;
       const elapsedTime = Date.now() - this.currentTaskStartTime;
-      this.currentTaskRemainingTime -= elapsedTime;
+      // Adjust remaining time for the current task
+      this.currentTask.delay -= elapsedTime;
     }
   }
 
   resume() {
-    if (this.paused) {
-      this.paused = false;
-      // Immediately start the next task with the adjusted remaining time
-      this.executeNextTask();
-    }
+    this.paused = false;
+    // Immediately resume with the adjusted delay
+    this.executeNextTask();
   }
 
   cancel() {
     clearTimeout(this.currentTaskTimer);
     this.taskQueue = [];
+    this.currentTask = null;
     this.paused = false;
     console.log("Scheduler canceled. All pending tasks have been removed.");
   }
 }
 
-// Example Usage
+
 const scheduler = new TaskScheduler();
 
 scheduler.addTask(() => console.log("Task 1 executed"), 2000); // Execute after 2 seconds
